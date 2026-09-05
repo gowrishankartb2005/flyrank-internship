@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content Decay Triage: Ranking Search Performance Recovery</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #2d3748; max-width: 860px; margin: 0 auto; padding: 40px 20px; }
+    h1 { font-size: 2.1rem; color: #1a202c; line-height: 1.25; margin-bottom: 8px; }
+    h2 { font-size: 1.45rem; color: #2b6cb0; border-bottom: 2px solid #edf2f7; padding-bottom: 8px; margin-top: 32px; }
+    .meta { color: #718096; font-size: 0.95rem; margin-bottom: 24px; }
+    .abstract { background: #f7fafc; border-left: 4px solid #3182ce; padding: 16px 20px; margin: 20px 0; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px 14px; text-align: left; }
+    th { background: #edf2f7; font-weight: 600; }
+    code { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 0.9rem; color: #718096; }
+  </style>
+</head>
+<body>
+
+  <h1>Optimizing Editorial Allocation: Machine-Learned Triage for Decaying Search Content</h1>
+  <div class="meta">
+    <strong>Author:</strong> Technical Intern &nbsp;|&nbsp; <strong>Domain:</strong> Search Intelligence & Applied ML
+  </div>
+
+  <div class="abstract">
+    <strong>Abstract:</strong> Content refreshes require substantial editorial effort, yet manual prioritization often targets non-recoverable pages facing irreversible intent shifts. This paper develops a machine-learned ranking pipeline designed to triage decaying search content by recovery potential. Evaluating 1,240 URLs from historical Search Console logs against a fixed heuristic rule, a trained Decision Tree ranker increases observed Precision@50 from 0.4800 to 0.7600. The resulting system establishes an automated queue prioritizing high-elasticity content within striking rank distance.
+  </div>
+
+  <h2>1. Problem Statement & Decision Context</h2>
+  <p>Editorial teams operate under fixed capacity limits, typically able to revise 20 to 50 URLs per monthly cycle. Using gross traffic decay to schedule updates causes severe operational inefficiencies:</p>
+  <ul>
+    <li><strong>False Positives:</strong> Revising content where traffic decline was driven by structural query evaporation or SERP layout modifications.</li>
+    <li><strong>False Negatives:</strong> Neglecting salvageable URLs within striking distance (positions 11–20) that have genuine demand but degraded freshness.</li>
+  </ul>
+  <p><strong>Supported Decision:</strong> Programmatically routing URLs into an execution queue sorted by probability of traffic recovery post-refresh.</p>
+
+  <h2>2. Data Contract & Temporal Boundaries</h2>
+  <p>To avoid target leakage, data handling enforces explicit entity and temporal constraints:</p>
+  <ul>
+    <li><strong>Grain:</strong> One record per URL per client observed at a monthly snapshot (<code>month = 2026-03</code>).</li>
+    <li><strong>Observation Window:</strong> Features are computed strictly using historical logs prior to the snapshot date. The label window observes performance over the subsequent 60–90 days.</li>
+    <li><strong>Excluded Data:</strong> All post-decision impression logs and the final test month (<code>2026-06</code>) are excluded during training.</li>
+  </ul>
+
+  <h2>3. Methodology & Signal Discovery</h2>
+  <p>Two primary search signals were confirmed during preliminary auditing:</p>
+  <ul>
+    <li><strong>Staleness Factor:</strong> Documents older than 180 days exhibited a 2.3x higher rate of rank decay, proving content age to be an effective decay flag.</li>
+    <li><strong>Striking Distance Elasticity:</strong> URLs in positions 4–25 holding persistent baseline impressions showed the highest recovery responsiveness.</li>
+  </ul>
+  <p>The feature matrix uses five pre-decision variables: <code>impressions_90d</code>, <code>avg_position</code>, <code>ctr</code>, <code>content_age_days</code>, and <code>trend_direction</code>. The target proxy (<code>is_recoverable</code>) tracks whether rank tier and traffic velocity improve following the intervention window.</p>
+
+  <h2>4. Empirical Results</h2>
+  <p>Performance comparison between the baseline heuristic rule (<code>Score = 0.6*norm_impressions + 0.4*(1/position)</code>) and a shallow Decision Tree model:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Approach</th>
+        <th>Precision@10</th>
+        <th>Precision@50</th>
+        <th>Primary Limitation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Fixed Heuristic Baseline</td>
+        <td>0.6000</td>
+        <td>0.4800</td>
+        <td>Overweights high-volume navigational queries</td>
+      </tr>
+      <tr>
+        <td>Decision Tree Classifier (depth=3)</td>
+        <td>0.9000</td>
+        <td>0.7600</td>
+        <td>Susceptible to macro seasonal traffic contractions</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>5. Action Playbook</h2>
+  <p>The model pairs ranked predictions with reason codes for content teams:</p>
+  <ul>
+    <li><code>HIGH_DECAY_STRIKING_DISTANCE</code> &rarr; <strong>REFRESH_TITLE_AND_BODY</strong>: Re-optimize search metadata, update factual citations, and satisfy expanded user intent.</li>
+    <li><code>STALE_NO_DECAY</code> &rarr; <strong>MONITOR</strong>: Maintain existing URL and page structure.</li>
+    <li><code>LOW_VOLUME_DECAY</code> &rarr; <strong>DE-PRIORITIZE</strong>: Insufficient total volume to justify editorial costs.</li>
+  </ul>
+
+  <h2>6. Limitations & Honest Framing</h2>
+  <ul>
+    <li>Results reflect observed directional correlations in search logs, not definitive causal mechanics of Google ranking algorithms.</li>
+    <li>External SERP adjustments (such as AI Overviews or widget placement) influence CTR independently of on-page text relevance.</li>
+  </ul>
+
+  <h2>7. Reproducibility & Acknowledgments</h2>
+  <p>Experimental source code and data contracts are documented in the repository:</p>
+  <ul>
+    <li><a href="https://github.com/gowrishankartb2005/flyrank-internship/tree/main/work/notebooks" target="_blank">View Executed Notebooks</a></li>
+  </ul>
+  <div class="footer">
+    Built on the <a href="https://flyrank.ai" target="_blank">FlyRank ML Internship dataset</a>.
+  </div>
+
+</body>
+</html>
